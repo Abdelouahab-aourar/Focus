@@ -4,6 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import "./App.css";
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+
+let permissionGranted = await isPermissionGranted();
+
+if (!permissionGranted) {
+  const permission = await requestPermission();
+  permissionGranted = permission === 'granted';
+}
 
 const MODES = [
   { key: "focus", label: "Focus", color: "#f2a541" },
@@ -48,6 +56,9 @@ export default function App() {
         if (prev <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           setIsRunning(false);
+          if (permissionGranted) {
+            sendNotification({ title: 'Focus', body: `${activeMode.label.charAt(0).toUpperCase() + activeMode.label.slice(1)} time is over!` });
+          }
           return 0;
         }
         return prev - 1;
