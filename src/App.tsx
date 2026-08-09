@@ -3,6 +3,7 @@ import { Play, Pause, RotateCcw, Settings2, Volume2, VolumeX, X } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
@@ -21,11 +22,42 @@ const MODES = [
 
 type ModeKey = (typeof MODES)[number]["key"];
 
-const DEFAULT_DURATIONS: Record<ModeKey, number> = {
+type DurationPrefs = Record<ModeKey, number>;
+
+type UserPrefs = {
+  durations: DurationPrefs;
+  isSoundMuted: boolean;
+};
+
+const DEFAULT_DURATIONS: DurationPrefs = {
   focus: 90 * 60,
   break: 5 * 60,
   rest: 30 * 60,
 };
+
+function isTauriRuntime() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return "__TAURI_INTERNALS__" in window;
+}
+
+function sanitizeDurations(input: Partial<DurationPrefs> | undefined): DurationPrefs {
+  const sanitize = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.max(1, Math.min(180 * 60, Math.round(parsed)));
+  };
+
+  return {
+    focus: sanitize(input?.focus, DEFAULT_DURATIONS.focus),
+    break: sanitize(input?.break, DEFAULT_DURATIONS.break),
+    rest: sanitize(input?.rest, DEFAULT_DURATIONS.rest),
+  };
+}
 
 function formatTime(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
@@ -43,6 +75,12 @@ export default function App() {
   const [secondsLeft, setSecondsLeft] = useState(DEFAULT_DURATIONS.focus);
   const [isRunning, setIsRunning] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [savePrefsToFile, setSavePrefsToFile] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.localStorage.getItem("focus.savePrefsToFile") === "true";
+  });
   const [isSoundMuted, setIsSoundMuted] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -50,8 +88,10 @@ export default function App() {
     return window.localStorage.getItem("focus.soundMuted") === "true";
   });
   const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
+  const [prefsFileStatus, setPrefsFileStatus] = useState<"idle" | "saved" | "error" | "unsupported">("idle");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const initialPrefsLoadHandledRef = useRef(false);
 
   const activeMode = MODES.find((m) => m.key === mode)!;
   const totalSeconds = durations[mode];
@@ -64,6 +104,20 @@ export default function App() {
       alarmAudio.currentTime = 0;
     }
     setIsAlarmPlaying(false);
+  }, []);
+
+  const savePrefsToDataFile = useCallback(async (prefs: UserPrefs) => {
+    if (!isTauriRuntime()) {
+      setPrefsFileStatus("unsupported");
+      return;
+    }
+
+    try {
+      await invoke("save_user_prefs", { prefs });
+      setPrefsFileStatus("saved");
+    } catch {
+      setPrefsFileStatus("error");
+    }
   }, []);
 
   const playAlarmSound = useCallback(async () => {
@@ -95,6 +149,53 @@ export default function App() {
       stopAlarmSound();
     }
   }, [isSoundMuted, stopAlarmSound]);
+
+  useEffect(() => {
+    window.localStorage.setItem("focus.savePrefsToFile", String(savePrefsToFile));
+  }, [savePrefsToFile]);
+
+  useEffect(() => {
+    if (initialPrefsLoadHandledRef.current || !savePrefsToFile) {
+      return;
+    }
+    initialPrefsLoadHandledRef.current = true;
+
+    if (!isTauriRuntime()) {
+      setPrefsFileStatus("unsupported");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const loaded = await invoke<UserPrefs | null>("load_user_prefs");
+        if (loaded) {
+          const nextDurations = sanitizeDurations(loaded.durations);
+          setDurations(nextDurations);
+          setIsSoundMuted(Boolean(loaded.isSoundMuted));
+          setSecondsLeft((currentSeconds) => {
+            if (isRunning) {
+              return currentSeconds;
+            }
+            const bounded = Math.min(currentSeconds, nextDurations[mode]);
+            return Math.max(1, bounded);
+          });
+        }
+      } catch {
+        setPrefsFileStatus("error");
+      }
+    })();
+  }, [isRunning, mode, savePrefsToFile]);
+
+  useEffect(() => {
+    if (!savePrefsToFile) {
+      return;
+    }
+
+    void savePrefsToDataFile({
+      durations,
+      isSoundMuted,
+    });
+  }, [durations, isSoundMuted, savePrefsToDataFile, savePrefsToFile]);
 
   useEffect(() => {
     return () => {
@@ -253,6 +354,30 @@ export default function App() {
                     {isSoundMuted ? "Unmute" : "Mute"}
                   </Button>
                 </div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/6 bg-[#16161c] p-3">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-white/85">Save Prefs To File</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSavePrefsToFile((enabled) => !enabled)}
+                    className="shrink-0 rounded-full border-white/10 bg-transparent px-3 text-white/80 hover:bg-white/10 hover:text-white"
+                  >
+                    {savePrefsToFile ? "On" : "Off"}
+                  </Button>
+                </div>
+                {savePrefsToFile ? (
+                  <p className="m-0 px-1 text-[12px] text-white/45">
+                    {prefsFileStatus === "saved"
+                      ? "Preferences saved to data folder."
+                      : prefsFileStatus === "unsupported"
+                        ? "File save is only available in the Tauri desktop app."
+                        : prefsFileStatus === "error"
+                          ? "Could not save preferences file."
+                          : "Preferences will be saved automatically."}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <>

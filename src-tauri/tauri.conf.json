@@ -14,9 +14,9 @@
       {
         "title": "Focus",
         "width": 500,
-        "height": 550,
+        "height": 580,
         "minWidth": 500,
-        "minHeight": 550
+        "minHeight": 580
       }
     ],
     "security": {
