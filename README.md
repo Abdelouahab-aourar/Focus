@@ -45,3 +45,7 @@ Example:
 ## Notifications and Sound
 
 On timer completion, Focus requests notification permission, sends a desktop notification, and starts a looping alarm (`public/sounds/notification_sound.m4a`). The alarm can be stopped immediately from the main screen.
+
+## Download / Install
+
+Prebuilt cross-platform executables (Windows, macOS, Linux) are published on the [Releases page](https://github.com/Abdelouahab-aourar/Focus/releases). Download the installer for your platform and run it — no build step required.
