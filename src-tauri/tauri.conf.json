@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Focus",
-  "version": "1.0.0",
-  "identifier": "focus",
+  "version": "1.0.1",
+  "identifier": "com.focus.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Focus",
         "width": 500,
         "height": 580,

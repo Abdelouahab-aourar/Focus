@@ -59,8 +59,41 @@ fn load_user_prefs(app: AppHandle) -> Result<Option<UserPrefs>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let show = tauri::menu::MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+            let hide = tauri::menu::MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
+            let quit = tauri::menu::MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = tauri::menu::Menu::with_items(app, &[&show, &hide, &quit])?;
+            tauri::tray::TrayIconBuilder::new()
+            .icon(app.default_window_icon().unwrap().clone())
+            .tooltip("Focus")
+            .menu(&menu)
+            .on_menu_event(|app, event| {
+                match event.id().as_ref() {
+                "show" => {app.get_webview_window("main").unwrap().show().unwrap();}
+                "hide" => {app.get_webview_window("main").unwrap().hide().unwrap();}
+                "quit" => app.exit(0),
+                _ => {}
+                }
+            })
+            .build(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![save_user_prefs, load_user_prefs])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
