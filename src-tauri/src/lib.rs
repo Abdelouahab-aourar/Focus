@@ -17,6 +17,19 @@ struct DurationPrefs {
 struct UserPrefs {
     durations: DurationPrefs,
     is_sound_muted: bool,
+    #[serde(default)]
+    prayer_prefs: PrayerPrefs,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct PrayerPrefs {
+    #[serde(default)]
+    wilaya_name: String,
+    #[serde(default)]
+    commune_id: String,
+    #[serde(default)]
+    muted_prayers: std::collections::HashMap<String, bool>,
 }
 
 fn prefs_file_path(app: &AppHandle) -> Result<PathBuf, String> {

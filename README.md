@@ -5,6 +5,7 @@ A desktop-first focus timer built with React, Tauri and Rust.
 ## Features
 
 - Three timer modes: Focus, Break, and Rest
+- Adhan Times.
 - Circular progress timer with Start/Pause and Reset controls
 - Per-mode duration settings (minutes + seconds)
 - System notification and looping alarm sound on timer completion
@@ -36,7 +37,18 @@ Example:
     "break": 300,
     "rest": 1800
   },
-  "isSoundMuted": false
+  "isSoundMuted": false,
+  "prayerPrefs": {
+    "wilayaName": "Adrar",
+    "communeId": "1-0",
+    "mutedPrayers": {
+      "Fajr": false,
+      "Dhuhr": true,
+      "Asr": false,
+      "Maghrib": false,
+      "Isha": false
+    }
+  }
 }
 ```
 
@@ -45,6 +57,8 @@ Example:
 ## Notifications and Sound
 
 On timer completion, Focus requests notification permission, sends a desktop notification, and starts a looping alarm (`public/sounds/notification_sound.m4a`). The alarm can be stopped immediately from the main screen.
+
+Prayer times play the bundled adhan (`public/sounds/adhan.m4a`) once at each enabled prayer time and send a **Prayer time** desktop notification. The active sound can be stopped from the prayer view or the timer view, and each prayer has its own mute/unmute button. The selected wilaya, commune, and prayer audio settings are kept for the current session and are saved to `user-prefs.json` only when **Save Prefs To File** is enabled.
 
 ## Download / Install
 
